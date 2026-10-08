@@ -4,40 +4,32 @@ import com.google.firebase.firestore.DocumentId;
 import com.google.firebase.firestore.ServerTimestamp;
 
 import java.util.Date;
-
+// Classe Musica.java usada para armazenar as músicas e seus dados.
 public class Musica {
-    //ATENÇÃO: liberar comentario apos implementar o firebase
 
+    // Identificador do documento da música armazenado no Firestore.
     @DocumentId
     private String id;
-
+    // Dados da música armazenados no Firestore.
     private String titulo;
     private String artista;
     private String indicadoPor;
     private long votos;
-
-    //ATENÇÃO: liberar comentario apos implementar o firebase
     @ServerTimestamp
     private Date criadoEm;
 
+    // Construtor padrão da classe Musica.
     public Musica() {
     }
-
-    public Musica(String id, String titulo, String artista, String indicadoPor, long votos, Date criadoEm) {
-        this.id = id;
-        this.titulo = titulo;
-        this.artista = artista;
-        this.indicadoPor = indicadoPor;
-        this.votos = votos;
-        this.criadoEm = criadoEm;
-    }
-
+    // Construtor da classe Música que recebe os dados da música que será usado
+    // em MainActivity para criar um documento no Firestore.
     public Musica(String titulo, String artista, String indicadoPor) {
         this.titulo = titulo;
         this.artista = artista;
         this.indicadoPor = indicadoPor;
     }
 
+    // Getters e setters dos atributos da classe Musica.
     public String getId() {
         return id;
     }

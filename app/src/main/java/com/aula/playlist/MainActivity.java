@@ -1,11 +1,11 @@
 package com.aula.playlist;
-
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.EditText;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
@@ -21,9 +21,10 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.aula.playlist.adapter.MusicaAdapter;
 import com.aula.playlist.model.Musica;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
-import com.google.firebase.Firebase;
+import com.google.android.material.snackbar.Snackbar;
 import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.Query;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,8 +36,13 @@ public class MainActivity extends AppCompatActivity implements MusicaAdapter.OnM
 
     private RecyclerView listaMusicas;
 
-    MusicaAdapter adapter;
+    private TextView txtVazio;
+
+    private MusicaAdapter adapter;
     private List<Musica> musicas = new ArrayList<>();
+
+    // Instância do Firestore usada para acessar a coleção playlist.
+    FirebaseFirestore db = FirebaseFirestore.getInstance();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -60,20 +66,22 @@ public class MainActivity extends AppCompatActivity implements MusicaAdapter.OnM
         fab.setOnClickListener(v -> mostrarDialogoNovaMusica());
 
 
-        // Adicionar SUA IMPLEMENTAÇÃO AQUI
-
-        //Configurar a implementação do adapter
+        // Adapter exibe a lista e envia os cliques de votar/excluir para a Activity.
         adapter = new MusicaAdapter(musicas);
-
-        //Configurar OnClickMusica
         adapter.setOnMusicaClickListener(this);
 
-        //Configurar recyclerView
+
         listaMusicas = findViewById(R.id.listaMusicas);
         listaMusicas.setLayoutManager(new LinearLayoutManager(MainActivity.this));
         listaMusicas.setAdapter(adapter);
 
+        //Configurar TextView vazio
+        txtVazio = findViewById(R.id.txtVazio);
+
+        // Observa a coleção "playlist" do Firestore em tempo real e mantém a
+        // lista ordenada pelos votos.
         db.collection("playlist")
+                .orderBy("votos", Query.Direction.DESCENDING)
                 .addSnapshotListener((snapshot, error) -> {
                     if (error != null){
                         Toast.makeText(this, "Erro ao carregar músicas", Toast.LENGTH_SHORT).show();
@@ -82,19 +90,30 @@ public class MainActivity extends AppCompatActivity implements MusicaAdapter.OnM
                     musicas.clear();
                     for (var documento : snapshot.getDocuments()){
                         Musica musica = documento.toObject(Musica.class);
+                        // Converte cada documento em Musica e guarda seu ID para futuras alterações.
                         musica.setId(documento.getId());
                         musicas.add(musica);
                     }
+                    // Mostra a mensagem de playlist vazia quando não há músicas.
+                    if (musicas.isEmpty()){
+                        listaMusicas.setVisibility(View.GONE);
+                        txtVazio.setVisibility(View.VISIBLE);
+                    }else {
+                        listaMusicas.setVisibility(View.VISIBLE);
+                        txtVazio.setVisibility(View.GONE);
+                    }
+                    // Atualiza o RecyclerView após alterar a lista de músicas.
                     adapter.notifyDataSetChanged();
                 });
 
 
 
 
+
+
     }
 
-    //Configurar firebase
-    FirebaseFirestore db = FirebaseFirestore.getInstance();
+
 
 
 
@@ -139,22 +158,24 @@ public class MainActivity extends AppCompatActivity implements MusicaAdapter.OnM
                     String artista = campoArtista.getText().toString().trim();
 
                     if (TextUtils.isEmpty(titulo) || TextUtils.isEmpty(artista)) {
-                        Toast.makeText(this, "Preencha título e artista", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, "Preencha título e artista",
+                                Toast.LENGTH_SHORT).show();
                         return;
                     }
+
+                    // Cria a música com o usuário que fez a indicação.
                     Musica musica = new Musica(titulo,artista,meuNome);
-                    musicas.clear();
                     db.collection("playlist")
                             .add(musica)
                             .addOnSuccessListener(documentReference -> {
-                                        Toast.makeText(this, "Música adicionada com sucesso", Toast.LENGTH_SHORT).show();
                                         campoTitulo.setText("");
                                         campoArtista.setText("");
                                         campoTitulo.requestFocus();
                                     }
                             )
                             .addOnFailureListener(e -> {
-                                        Toast.makeText(this, "Erro ao adicionar música", Toast.LENGTH_SHORT).show();
+                                        Toast.makeText(this, "Erro ao adicionar música",
+                                                Toast.LENGTH_SHORT).show();
                                     });
 
                 })
@@ -162,10 +183,35 @@ public class MainActivity extends AppCompatActivity implements MusicaAdapter.OnM
     }
 
     public void votarMusica(Musica musica){
+        // Incrementa em 1 o número de votos da música no Firestore.
         db.collection("playlist")
                 .document(musica.getId())
                 .update("votos", FieldValue.increment(1));
     }
-    public void excluirMusica(Musica musica){}
+    public void excluirMusica(Musica musica){
+        // Confirmar a exclusão se a música foi indicada por mim
+        if (musica.getIndicadoPor().equals(meuNome)){
+            new AlertDialog.Builder(this)
+                    .setTitle("Excluir")
+                    .setMessage("Tirar \"" + musica.getTitulo() + "\" da playlist?")
+                    .setNegativeButton("Não", null)
+                    .setPositiveButton("Excluir", (d, w) -> {
+                        db.collection("playlist")
+                                .document(musica.getId())
+                                .delete()
+                                .addOnSuccessListener(aVoid -> {
+                                    Snackbar.make(listaMusicas, "Música removida", Snackbar.LENGTH_LONG).show();
+                                })
+                                .addOnFailureListener(e -> {
+                                    Toast.makeText(this, "Erro ao excluir música", Toast.LENGTH_SHORT).show();
+                                });
+                    })
+                    .show();
+            }else {
+            // Informar que a música não foi indicada por mim
+            Toast.makeText(this, "Essa música é de " + musica.getIndicadoPor() + ".", Toast.LENGTH_SHORT).show();
+        }
+
+    }
 
 }
